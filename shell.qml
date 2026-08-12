@@ -4,8 +4,8 @@ import QtQuick
 import Qt.labs.folderlistmodel
 import Quickshell.Wayland
 
-const configPath = `${Quickshell.env("HOME")}/.config/hyprquickpaper/config.json`
-const commandsPath = `${Quickshell.env("HOME")}/.config/hyprquickpaper/commands.sh`
+const configPath = Quickshell.env("HOME") + "/.config/hyprquickpaper/config.json"
+const commandsPath = Quickshell.env("HOME") + "/.config/hyprquickpaper/commands.sh"
 
 PanelWindow {
     id: main
