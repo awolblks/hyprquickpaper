@@ -4,10 +4,11 @@ import QtQuick
 import Qt.labs.folderlistmodel
 import Quickshell.Wayland
 
-const configPath = Quickshell.env("HOME") + "/.config/hyprquickpaper/config.json"
-const commandsPath = Quickshell.env("HOME") + "/.config/hyprquickpaper/commands.sh"
-
 PanelWindow {
+    
+    const configPath = Quickshell.env("HOME") + "/.config/hyprquickpaper/config.json"
+    const commandsPath = Quickshell.env("HOME") + "/.config/hyprquickpaper/commands.sh"
+
     id: main
     implicitHeight: 500
     implicitWidth: Screen.width
