@@ -15,9 +15,6 @@ PanelWindow {
     exclusionMode: "Ignore"
     exclusiveZone: 1
 
-    const configPath = Quickshell.env("HOME") + "/.config/hyprquickpaper/config.json"
-    const commandsPath = Quickshell.env("HOME") + "/.config/hyprquickpaper/commands.sh"
-
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     Component.onCompleted: {
@@ -26,7 +23,7 @@ PanelWindow {
     }
 
     FileView {
-        path: Quickshell.shellPath(configPath)
+        path: Quickshell.shellPath(Quickshell.env("HOME") + "/.config/hyprquickpaper/config.json")
         watchChanges: true
         onFileChanged: reload()
 
@@ -68,7 +65,7 @@ PanelWindow {
 
         function activateCurrent() {
             const path = folderModel.get(selectedIndex, "filePath")
-            Quickshell.execDetached(["bash", Quickshell.shellPath(commandsPath), path])
+            Quickshell.execDetached(["bash", Quickshell.shellPath(Quickshell.env("HOME") + "/.config/hyprquickpaper/commands.sh"), path])
             Qt.quit()
         }
 
