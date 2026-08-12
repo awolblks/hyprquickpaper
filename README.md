@@ -1,3 +1,5 @@
+This fork changes config.json and commands.sh paths to ~/.config/quickshell/hyprquickpaper.
+
 # HyprQuickPaper
 
 Wallpaper selector made using quickshell. Inspired by : [ilyamiro's dots](https://github.com/ilyamiro/nixos-configuration)
