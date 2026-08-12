@@ -5,10 +5,6 @@ import Qt.labs.folderlistmodel
 import Quickshell.Wayland
 
 PanelWindow {
-    
-    const configPath = Quickshell.env("HOME") + "/.config/hyprquickpaper/config.json"
-    const commandsPath = Quickshell.env("HOME") + "/.config/hyprquickpaper/commands.sh"
-
     id: main
     implicitHeight: 500
     implicitWidth: Screen.width
@@ -18,6 +14,9 @@ PanelWindow {
     aboveWindows: true
     exclusionMode: "Ignore"
     exclusiveZone: 1
+
+    const configPath = Quickshell.env("HOME") + "/.config/hyprquickpaper/config.json"
+    const commandsPath = Quickshell.env("HOME") + "/.config/hyprquickpaper/commands.sh"
 
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
