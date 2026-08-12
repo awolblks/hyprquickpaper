@@ -4,7 +4,8 @@ import QtQuick
 import Qt.labs.folderlistmodel
 import Quickshell.Wayland
 
-
+const configPath = `${Quickshell.env("HOME")}/.config/quickshell/hyprquickpaper/config.json`
+const commandsPath = `${Quickshell.env("HOME")}/.config/quickshell/hyprquickpaper/commands.sh`
 
 PanelWindow {
     id: main
@@ -25,7 +26,7 @@ PanelWindow {
     }
 
     FileView {
-        path: Quickshell.shellPath("config.json")
+        path: Quickshell.shellPath(configPath)
         watchChanges: true
         onFileChanged: reload()
 
@@ -67,7 +68,7 @@ PanelWindow {
 
         function activateCurrent() {
             const path = folderModel.get(selectedIndex, "filePath")
-            Quickshell.execDetached(["bash", Quickshell.shellPath("commands.sh"), path])
+            Quickshell.execDetached(["bash", Quickshell.shellPath(commandsPath), path])
             Qt.quit()
         }
 
