@@ -23,7 +23,7 @@ PanelWindow {
     }
 
     FileView {
-        path: Quickshell.shellPath(Quickshell.env("HOME") + "/.config/hyprquickpaper/config.json")
+        path: Quickshell.env("HOME") + "/.config/hyprquickpaper/config.json"
         watchChanges: true
         onFileChanged: reload()
 
@@ -65,7 +65,7 @@ PanelWindow {
 
         function activateCurrent() {
             const path = folderModel.get(selectedIndex, "filePath")
-            Quickshell.execDetached(["bash", Quickshell.shellPath(Quickshell.env("HOME") + "/.config/hyprquickpaper/commands.sh"), path])
+            Quickshell.execDetached(["bash", Quickshell.env("HOME") + "/.config/hyprquickpaper/commands.sh", path])
             Qt.quit()
         }
 
