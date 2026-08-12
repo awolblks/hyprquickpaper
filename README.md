@@ -1,4 +1,4 @@
-This fork changes config.json and commands.sh paths to ~/.config/quickshell/hyprquickpaper.
+This fork changes config.json and commands.sh paths to ~/.config/quickshell/hyprquickpaper/.
 
 # HyprQuickPaper
 
