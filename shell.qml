@@ -18,6 +18,7 @@ PanelWindow {
             property string cache_path
             property int number_of_pictures
             property string border_color
+            property real opacity
             // ---- Easy-to-edit settings ----
             property int speed //5000          // scroll animation speed
             property int animDuration //100    // ms for scroll animation
@@ -158,7 +159,7 @@ PanelWindow {
                 Image {
                     id: img
                     anchors.fill: parent
-                    opacity: 0.8
+                    opacity: configs.opacity
                     fillMode: Image.PreserveAspectCrop
 
                     asynchronous: true
