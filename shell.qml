@@ -7,13 +7,27 @@ import Quickshell.Wayland
 PanelWindow {
     id: main
 
+    FileView {
+        path: Quickshell.env("HOME") + "/.config/hyprquickpaper/config.json"
+        watchChanges: true
+        onFileChanged: reload()
+
+        JsonAdapter {
+            id: configs
+            property string wallpaper_path
+            property string cache_path
+            property int number_of_pictures
+            property string border_color
+        }
+    }
+
     // ---- Easy-to-edit settings ----
-    property int speed: 5000          // scroll animation speed
-    property int animDuration: 100    // ms for scroll animation
-    property real zoomScale: 0.8        // scale of the tile at screen center (peak)
-    property real edgeScale: 0.3      // scale of tiles at the screen edges (trough)
-    property real skewFactor: 0   // italic-style shear on tiles
-    property int baseSpacing: 8       // resting gap between tiles (grows automatically as tiles magnify)
+    property int speed: config.speed //5000          // scroll animation speed
+    property int animDuration: config.animDuration //100    // ms for scroll animation
+    property real zoomScale: config.zoomScale //0.8        // scale of the tile at screen center (peak)
+    property real edgeScale: config.edgeScale //0.3      // scale of tiles at the screen edges (trough)
+    property real skewFactor: config.skewFactor //0   // italic-style shear on tiles
+    property int baseSpacing: config.baseSpacing //8       // resting gap between tiles (grows automatically as tiles magnify)
     // --------------------------------
 
     implicitHeight: 500
@@ -29,20 +43,6 @@ PanelWindow {
 
     Component.onCompleted: {
         Quickshell.execDetached(["bash", Quickshell.shellPath("cache.sh"), Quickshell.shellDir])
-    }
-
-    FileView {
-        path: Quickshell.env("HOME") + "/.config/hyprquickpaper/config.json"
-        watchChanges: true
-        onFileChanged: reload()
-
-        JsonAdapter {
-            id: configs
-            property string wallpaper_path
-            property string cache_path
-            property int number_of_pictures
-            property string border_color
-        }
     }
 
     FolderListModel {
