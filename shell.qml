@@ -18,17 +18,17 @@ PanelWindow {
             property string cache_path
             property int number_of_pictures
             property string border_color
+            // ---- Easy-to-edit settings ----
+            property int speed //5000          // scroll animation speed
+            property int animDuration //100    // ms for scroll animation
+            property real zoomScale //0.8        // scale of the tile at screen center (peak)
+            property real edgeScale //0.3      // scale of tiles at the screen edges (trough)
+            property real skewFactor //0   // italic-style shear on tiles
+            property int baseSpacing //8       // resting gap between tiles (grows automatically as tiles magnify)
+            // --------------------------------
         }
     }
 
-    // ---- Easy-to-edit settings ----
-    property int speed: configs.speed //5000          // scroll animation speed
-    property int animDuration: configs.animDuration //100    // ms for scroll animation
-    property real zoomScale: configs.zoomScale //0.8        // scale of the tile at screen center (peak)
-    property real edgeScale: configs.edgeScale //0.3      // scale of tiles at the screen edges (trough)
-    property real skewFactor: configs.skewFactor //0   // italic-style shear on tiles
-    property int baseSpacing: configs.baseSpacing //8       // resting gap between tiles (grows automatically as tiles magnify)
-    // --------------------------------
 
     implicitHeight: 500
     implicitWidth: Screen.width
@@ -60,7 +60,7 @@ PanelWindow {
 
         model: folderModel
         orientation: ListView.Horizontal
-        spacing: main.baseSpacing
+        spacing: configs.baseSpacing
         clip: true
         cacheBuffer: 400
 
@@ -93,9 +93,9 @@ PanelWindow {
                 contentX = clampX(itemStart - (width - step))
         }
 
-        // Moves the selection by `delta` tiles, animating at `speedMultiplier`x speed
+        // Moves the selection by `delta` tiles, animating at `Multiplier`x speed
         function moveSelection(delta, speedMultiplier) {
-            anim.v = main.speed * speedMultiplier
+            anim.v = configs.speed * speedMultiplier
             selectedIndex = clampIndex(selectedIndex + delta)
             ensureVisibleAnimated(selectedIndex)
         }
@@ -103,8 +103,8 @@ PanelWindow {
         Behavior on contentX {
             SmoothedAnimation {
                 id: anim
-                property int v: main.speed
-                duration: main.animDuration
+                property int v: configs.speed
+                duration: configs.animDuration
             }
         }
 
@@ -129,7 +129,7 @@ PanelWindow {
                 const centerX = x - list.contentX + baseWidth / 2
                 const frac = Math.min(1, Math.abs(centerX - list.viewportCenterX) / list.viewportCenterX)
                 const t = 1 - frac * frac * (3 - 2 * frac) // smoothstep falloff
-                return main.edgeScale + (main.zoomScale - main.edgeScale) * t
+                return configs.edgeScale + (configs.zoomScale - configs.edgeScale) * t
             }
 
             // This IS the delegate's real layout width, so as it grows, ListView pushes
@@ -152,7 +152,7 @@ PanelWindow {
                     color: configs.border_color
                     anchors.centerIn: parent
                     font.pixelSize: 16
-                    transform: Shear { xFactor: main.skewFactor }
+                    transform: Shear { xFactor: configs.skewFactor }
                 }
 
                 Image {
@@ -171,10 +171,10 @@ PanelWindow {
                     // (the active/zoomed size), rather than tracking the animating
                     // width/height - that would re-decode on every animation frame
                     // and cause a visible blink.
-                    sourceSize.width: delegateItem.baseWidth * main.zoomScale
+                    sourceSize.width: delegateItem.baseWidth * configs.zoomScale
                     sourceSize.height: delegateItem.height
 
-                    transform: Shear { xFactor: main.skewFactor }
+                    transform: Shear { xFactor: configs.skewFactor }
 
                     Timer {
                         id: retryTimer
@@ -205,7 +205,7 @@ PanelWindow {
                     border.width: 2
                     border.color: configs.border_color
 
-                    transform: Shear { xFactor: main.skewFactor }
+                    transform: Shear { xFactor: configs.skewFactor }
                 }
             }
 
