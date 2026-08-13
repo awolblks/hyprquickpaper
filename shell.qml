@@ -22,12 +22,12 @@ PanelWindow {
     }
 
     // ---- Easy-to-edit settings ----
-    property int speed: config.speed //5000          // scroll animation speed
-    property int animDuration: config.animDuration //100    // ms for scroll animation
-    property real zoomScale: config.zoomScale //0.8        // scale of the tile at screen center (peak)
-    property real edgeScale: config.edgeScale //0.3      // scale of tiles at the screen edges (trough)
-    property real skewFactor: config.skewFactor //0   // italic-style shear on tiles
-    property int baseSpacing: config.baseSpacing //8       // resting gap between tiles (grows automatically as tiles magnify)
+    property int speed: configs.speed //5000          // scroll animation speed
+    property int animDuration: configs.animDuration //100    // ms for scroll animation
+    property real zoomScale: configs.zoomScale //0.8        // scale of the tile at screen center (peak)
+    property real edgeScale: configs.edgeScale //0.3      // scale of tiles at the screen edges (trough)
+    property real skewFactor: configs.skewFactor //0   // italic-style shear on tiles
+    property int baseSpacing: configs.baseSpacing //8       // resting gap between tiles (grows automatically as tiles magnify)
     // --------------------------------
 
     implicitHeight: 500
