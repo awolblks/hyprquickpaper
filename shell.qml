@@ -32,7 +32,7 @@ PanelWindow {
     }
 
     FileView {
-        path: Quickshell.shellPath("config.json")
+        path: Quickshell.env("HOME") + "/.config/hyprquickpaper/config.json"
         watchChanges: true
         onFileChanged: reload()
 
@@ -78,7 +78,7 @@ PanelWindow {
 
         function activateCurrent() {
             const path = folderModel.get(selectedIndex, "filePath")
-            Quickshell.execDetached(["bash", Quickshell.shellPath("commands.sh"), path])
+            Quickshell.execDetached(["bash", Quickshell.env("HOME") + "/.config/hyprquickpaper/commands.sh", path])
             Qt.quit()
         }
 
@@ -227,10 +227,12 @@ PanelWindow {
             const big = configs.number_of_pictures
 
             switch (event.key) {
+            case Qt.Key_Right:
             case Qt.Key_J:
                 moveSelection(1, 1)
                 break
             case Qt.Key_K:
+            case Qt.Key_Left:
                 moveSelection(-1, 1)
                 break
             case Qt.Key_D:
