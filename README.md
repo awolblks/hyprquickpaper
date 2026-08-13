@@ -1,4 +1,5 @@
 This fork changes config.json and commands.sh paths to ~/.config/quickshell/hyprquickpaper/.
+It takes the shell.qml from 43PR/dotfiles but puts the settings from shell.qml in config.json.
 
 # HyprQuickPaper
 
