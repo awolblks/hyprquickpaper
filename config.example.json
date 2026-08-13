@@ -3,6 +3,7 @@
     "cache_path": "/home/<usrname>/.cache/quickshell/thumbs/",
     "number_of_pictures": 7,
     "border_color": "#C27B63",
+    "opacity": 1,
     "cache_batch_size": 20,
     "speed": 5000,
     "animDuration": 100,
