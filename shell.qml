@@ -72,13 +72,6 @@ PanelWindow {
         clip: true
         cacheBuffer: 400
 
-        /*
-         * IMPORTANT:
-         *
-         * The ListView geometry stays fixed.
-         * baseSpacing therefore controls the actual slot spacing,
-         * while the visual wallpaper width is handled separately.
-         */
         spacing: configs.baseSpacing
 
         property real tileWidth:
@@ -89,10 +82,6 @@ PanelWindow {
 
         property int selectedIndex: 0
 
-        /*
-         * How far the selected wallpaper can move before the strip
-         * itself starts moving.
-         */
         property real centerZone:
             width * 0.30
 
@@ -132,10 +121,6 @@ PanelWindow {
             if (!item)
                 return
 
-            /*
-             * Use the FIXED slot center.
-             * The visual scaling has no influence on scrolling.
-             */
             const center =
                 item.x
                 - contentX
@@ -208,9 +193,9 @@ PanelWindow {
             id: delegateItem
 
             /*
-             * FIXED SLOT.
-             *
-             * This never changes with scale.
+             * IMPORTANT:
+             * This remains completely unchanged.
+             * The ListView still has exactly the same 7 slots.
              */
             width: list.tileWidth
             height: list.height
@@ -218,9 +203,6 @@ PanelWindow {
             property bool selected:
                 index === list.selectedIndex
 
-            /*
-             * Fixed slot center on the screen.
-             */
             property real slotCenterX:
                 x
                 - list.contentX
@@ -232,12 +214,6 @@ PanelWindow {
                     - list.viewportCenterX
                 )
 
-            /*
-             * Distance from center:
-             *
-             * 0 = center
-             * 1 = edge
-             */
             property real normalizedDistance: {
                 return Math.min(
                     1,
@@ -247,9 +223,7 @@ PanelWindow {
             }
 
             /*
-             * Hard-coded smoothstep curve.
-             *
-             * No curve parameter in the config.
+             * Same scale curve as before.
              */
             property real scaleFactor: {
                 const d =
@@ -278,19 +252,13 @@ PanelWindow {
                     parent
 
                 /*
-                 * The important part:
+                 * THIS IS THE ONLY GEOMETRY CHANGE.
                  *
-                 * The ListView slot remains tileWidth.
-                 *
-                 * The visual width compensates for the scale so the
-                 * wallpaper doesn't become physically tiny at the
-                 * edges.
-                 *
-                 * The 1.0 here means the wallpaper fills its slot.
+                 * The ListView slot remains unchanged.
+                 * The wallpaper itself is 10% wider.
                  */
                 width:
-                    delegateItem.width
-                    / delegateItem.scaleFactor
+                    delegateItem.width * 1.10
 
                 height:
                     delegateItem.height
@@ -300,10 +268,6 @@ PanelWindow {
 
                 transformOrigin:
                     Item.Center
-
-                // ----------------------------------------------------
-                // Wallpaper fallback text
-                // ----------------------------------------------------
 
                 Text {
                     id: alt
@@ -323,10 +287,6 @@ PanelWindow {
                             configs.skewFactor
                     }
                 }
-
-                // ----------------------------------------------------
-                // Wallpaper image
-                // ----------------------------------------------------
 
                 Image {
                     id: img
@@ -350,13 +310,18 @@ PanelWindow {
                         + fileName
 
                     /*
-                     * Decode based on the actual visual width.
+                     * Fixed decode size.
+                     *
+                     * This does NOT depend on the animated width
+                     * or scale, so scrolling doesn't cause blinking.
                      */
                     sourceSize.width:
-                        visual.width
+                        delegateItem.width
+                        * 1.10
+                        * configs.zoomScale
 
                     sourceSize.height:
-                        visual.height
+                        delegateItem.height
 
                     transform: Shear {
                         xFactor:
@@ -390,7 +355,7 @@ PanelWindow {
                 }
 
                 // ----------------------------------------------------
-                // Single selection border
+                // Highlight
                 // ----------------------------------------------------
 
                 Rectangle {
@@ -407,8 +372,7 @@ PanelWindow {
                     color:
                         "transparent"
 
-                    border.width:
-                        2
+                    border.width: 2
 
                     border.color:
                         configs.border_color
@@ -421,7 +385,7 @@ PanelWindow {
             }
 
             // --------------------------------------------------------
-            // Mouse interaction
+            // Mouse
             // --------------------------------------------------------
 
             MouseArea {
@@ -431,10 +395,6 @@ PanelWindow {
                 hoverEnabled:
                     true
 
-                /*
-                 * Hover changes selection only.
-                 * It does NOT move the strip.
-                 */
                 onEntered: {
                     list.selectWallpaper(index)
                 }
@@ -444,9 +404,6 @@ PanelWindow {
                     list.activateCurrent()
                 }
 
-                /*
-                 * Wheel navigation behaves like keyboard navigation.
-                 */
                 onWheel: function(wheel) {
                     if (wheel.angleDelta.y < 0) {
                         list.moveSelection(1)
@@ -460,7 +417,7 @@ PanelWindow {
         }
 
         // ------------------------------------------------------------
-        // Keyboard controls
+        // Keyboard
         // ------------------------------------------------------------
 
         Keys.onPressed: function(event) {
