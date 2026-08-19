@@ -69,98 +69,231 @@ PanelWindow {
         model: folderModel
         orientation: ListView.Horizontal
 
-        spacing: configs.baseSpacing
-
-        // Extra space at both ends allows the first and last wallpaper
-        // to be moved all the way to the center of the screen.
-        leftMargin: width / 2 - tileWidth / 2
-        rightMargin: width / 2 - tileWidth / 2
-
         clip: true
         cacheBuffer: 400
 
+        // ------------------------------------------------------------
+        // Layout
+        //
+        // Delegates themselves have a FIXED width.
+        //
+        // This is important. Magnification happens visually inside
+        // the delegate, so changing scale can never change ListView
+        // geometry or cause contentX to move underneath us.
+        // ------------------------------------------------------------
+
+        spacing: configs.baseSpacing
+
+        property real tileWidth:
+            width / Math.max(1, configs.number_of_pictures) - 10
+
+        property real step:
+            tileWidth + spacing
+
+        property real viewportCenterX:
+            width / 2
+
+        // The selected wallpaper is allowed to live inside this zone
+        // without moving the strip.
+        //
+        // 0.30 means the zone occupies roughly the middle 30% of the
+        // screen.
+        property real centerZone:
+            width * 0.30
+
+        property real centerLeft:
+            viewportCenterX - centerZone / 2
+
+        property real centerRight:
+            viewportCenterX + centerZone / 2
+
         property int selectedIndex: 0
-        property real tileWidth: width / configs.number_of_pictures - 10
-        property real viewportCenterX: width / 2
+        property int hoveredIndex: -1
+
+        // ------------------------------------------------------------
+        // Helpers
+        // ------------------------------------------------------------
 
         function clampIndex(i) {
             return Math.max(0, Math.min(i, count - 1))
         }
 
-        function clampX(x) {
-            return Math.max(0, Math.min(x, contentWidth - width))
+        function maxContentX() {
+            return Math.max(0, contentWidth - width)
         }
 
+        function clampX(x) {
+            return Math.max(0, Math.min(x, maxContentX()))
+        }
+
+        function itemCenterOnScreen(i) {
+            const item = itemAtIndex(i)
+
+            if (!item)
+                return viewportCenterX
+
+            return item.x - contentX + item.width / 2
+        }
+
+        // ------------------------------------------------------------
+        // Move the strip just enough to keep the selected item inside
+        // the center zone.
+        //
+        // Unlike the previous version, this doesn't try to force the
+        // item exactly into the middle.
+        // ------------------------------------------------------------
+
+        function keepSelectedInCenterZone(i) {
+            const item = itemAtIndex(i)
+
+            if (!item)
+                return
+
+            const center = item.x - contentX + item.width / 2
+
+            let targetX = contentX
+
+            if (center < centerLeft) {
+                targetX += center - centerLeft
+            } else if (center > centerRight) {
+                targetX += center - centerRight
+            } else {
+                return
+            }
+
+            contentX = clampX(targetX)
+        }
+
+        // ------------------------------------------------------------
+        // Keyboard navigation
+        //
+        // Selection moves one wallpaper at a time.
+        // The strip only starts moving when the selected wallpaper
+        // leaves the center zone.
+        // ------------------------------------------------------------
+
+        function moveSelection(delta) {
+            const newIndex =
+                clampIndex(selectedIndex + delta)
+
+            if (newIndex === selectedIndex)
+                return
+
+            selectedIndex = newIndex
+
+            // Wait until ListView has updated the delegate positions.
+            Qt.callLater(function() {
+                keepSelectedInCenterZone(newIndex)
+            })
+        }
+
+        // ------------------------------------------------------------
+        // Mouse hover
+        //
+        // Hover changes the highlighted wallpaper but does NOT force
+        // keyboard selection to change.
+        //
+        // If the hovered wallpaper is outside the useful area, we move
+        // the strip toward it.
+        // ------------------------------------------------------------
+
+        function hoverWallpaper(i) {
+            hoveredIndex = i
+
+            const item = itemAtIndex(i)
+
+            if (!item)
+                return
+
+            const center =
+                item.x - contentX + item.width / 2
+
+            // Give the mouse a little more freedom than keyboard
+            // selection before moving the strip.
+            const hoverLeft = width * 0.10
+            const hoverRight = width * 0.90
+
+            let targetX = contentX
+
+            if (center < hoverLeft) {
+                targetX += center - hoverLeft
+            } else if (center > hoverRight) {
+                targetX += center - hoverRight
+            }
+
+            if (targetX !== contentX)
+                contentX = clampX(targetX)
+        }
+
+        // ------------------------------------------------------------
+        // Activation
+        // ------------------------------------------------------------
+
         function activateCurrent() {
-            const path = folderModel.get(selectedIndex, "filePath")
+            const path =
+                folderModel.get(selectedIndex, "filePath")
 
             Quickshell.execDetached([
                 "bash",
-                Quickshell.env("HOME") + "/.config/hyprquickpaper/commands.sh",
+                Quickshell.env("HOME")
+                    + "/.config/hyprquickpaper/commands.sh",
                 path
             ])
 
             Qt.quit()
         }
 
-        // Move the selected item's actual center to the center of the viewport.
-        //
-        // We deliberately use item.x and item.width instead of calculating
-        // the position from the index. This is important because delegate
-        // widths change according to the magnification curve.
-        function ensureVisibleAnimated(i) {
-            const item = itemAtIndex(i)
-
-            if (!item)
-                return
-
-            const itemCenter = item.x + item.width / 2
-            const targetX = itemCenter - width / 2
-
-            contentX = clampX(targetX)
-        }
-
-        // Moves the selection by `delta` tiles.
-        function moveSelection(delta, speedMultiplier) {
-            anim.v = configs.speed * speedMultiplier
-
-            selectedIndex = clampIndex(selectedIndex + delta)
-
-            ensureVisibleAnimated(selectedIndex)
-        }
+        // ------------------------------------------------------------
+        // Smooth strip movement
+        // ------------------------------------------------------------
 
         Behavior on contentX {
-            SmoothedAnimation {
-                id: anim
+            NumberAnimation {
+                id: scrollAnimation
 
-                property int v: configs.speed
                 duration: configs.animDuration
+                easing.type: Easing.OutCubic
             }
         }
+
+        // ------------------------------------------------------------
+        // Delegates
+        // ------------------------------------------------------------
 
         delegate: Item {
             id: delegateItem
 
-            height: 500
-
-            property bool active: index === list.selectedIndex
-
-            // Base (unscaled) slot width.
-            // This is intentionally independent from the delegate's actual
-            // width because actual width depends on scaleFactor.
-            readonly property real baseWidth: list.tileWidth
-
-            // --- Dock-style magnification ---
+            // FIXED layout width.
             //
-            // Calculate scale from the delegate's current on-screen position.
-            property real scaleFactor: {
-                const centerX =
-                    x - list.contentX + baseWidth / 2
+            // Never change this according to scaleFactor.
+            // This keeps ListView's geometry stable.
+            width: list.tileWidth
+            height: list.height
 
+            property bool selected:
+                index === list.selectedIndex
+
+            property bool hovered:
+                index === list.hoveredIndex
+
+            // --------------------------------------------------------
+            // Calculate visual magnification from the tile's position.
+            // --------------------------------------------------------
+
+            property real visualCenterX:
+                x - list.contentX + width / 2
+
+            property real distanceFromCenter:
+                Math.abs(
+                    visualCenterX
+                    - list.viewportCenterX
+                )
+
+            property real scaleFactor: {
                 const frac =
                     Math.min(
                         1,
-                        Math.abs(centerX - list.viewportCenterX)
+                        distanceFromCenter
                         / list.viewportCenterX
                     )
 
@@ -171,8 +304,11 @@ PanelWindow {
                     + (configs.zoomScale - configs.edgeScale) * t
             }
 
-            // The delegate's actual layout width changes with magnification.
-            width: baseWidth * scaleFactor
+            // --------------------------------------------------------
+            // Visual tile
+            //
+            // Scale is applied here, not to the ListView delegate.
+            // --------------------------------------------------------
 
             Item {
                 id: content
@@ -180,16 +316,19 @@ PanelWindow {
                 anchors.centerIn: parent
 
                 width: parent.width
+                height: parent.height
 
-                // Prevent the image from becoming taller than the window.
-                height:
-                    delegateItem.height
-                    * Math.min(1, delegateItem.scaleFactor)
+                scale: delegateItem.scaleFactor
+
+                // Prevent the visual tile from extending vertically
+                // beyond the window.
+                transformOrigin: Item.Center
 
                 Text {
                     id: alt
 
                     text: ""
+
                     color: configs.border_color
 
                     anchors.centerIn: parent
@@ -214,13 +353,15 @@ PanelWindow {
                     cache: false
                     smooth: true
 
-                    source: "file://" + configs.cache_path + fileName
+                    source:
+                        "file://"
+                        + configs.cache_path
+                        + fileName
 
-                    // Decode once at the largest size the image will ever
-                    // be displayed instead of changing sourceSize during
-                    // the animation.
+                    // Decode once at the largest size we expect to show.
                     sourceSize.width:
-                        delegateItem.baseWidth * configs.zoomScale
+                        delegateItem.width
+                        * configs.zoomScale
 
                     sourceSize.height:
                         delegateItem.height
@@ -251,14 +392,18 @@ PanelWindow {
                     }
                 }
 
+                // ----------------------------------------------------
+                // Selected border
+                // ----------------------------------------------------
+
                 Rectangle {
-                    id: border
+                    id: selectedBorder
 
                     z: 10
 
                     anchors.fill: parent
 
-                    visible: delegateItem.active
+                    visible: delegateItem.selected
 
                     color: "transparent"
 
@@ -269,7 +414,43 @@ PanelWindow {
                         xFactor: configs.skewFactor
                     }
                 }
+
+                // ----------------------------------------------------
+                // Hover border
+                //
+                // This is deliberately separate from selection so the
+                // cursor can always tell you which wallpaper it is over.
+                // ----------------------------------------------------
+
+                Rectangle {
+                    id: hoverBorder
+
+                    z: 11
+
+                    anchors.fill: parent
+
+                    visible:
+                        delegateItem.hovered
+                        && !delegateItem.selected
+
+                    color: "transparent"
+
+                    border.width: 2
+
+                    // Slightly more subtle than the selected border.
+                    border.color: configs.border_color
+
+                    opacity: 0.65
+
+                    transform: Shear {
+                        xFactor: configs.skewFactor
+                    }
+                }
             }
+
+            // --------------------------------------------------------
+            // Mouse interaction
+            // --------------------------------------------------------
 
             MouseArea {
                 anchors.fill: parent
@@ -277,40 +458,64 @@ PanelWindow {
                 hoverEnabled: true
 
                 onEntered: {
-                    list.selectedIndex = index
+                    list.hoverWallpaper(index)
+                }
+
+                onExited: {
+                    if (list.hoveredIndex === index)
+                        list.hoveredIndex = -1
                 }
 
                 onClicked: {
+                    list.selectedIndex = index
+
+                    Qt.callLater(function() {
+                        list.keepSelectedInCenterZone(index)
+                    })
+
                     list.activateCurrent()
                 }
 
                 onWheel: function(wheel) {
-                    list.flick(-wheel.angleDelta.y * 8, 0)
+                    if (wheel.angleDelta.y < 0) {
+                        list.moveSelection(1)
+                    } else if (wheel.angleDelta.y > 0) {
+                        list.moveSelection(-1)
+                    }
+
                     wheel.accepted = true
                 }
             }
         }
 
+        // ------------------------------------------------------------
+        // Keyboard controls
+        // ------------------------------------------------------------
+
         Keys.onPressed: function(event) {
-            const big = configs.number_of_pictures
+            const big =
+                Math.max(
+                    1,
+                    configs.number_of_pictures
+                )
 
             switch (event.key) {
             case Qt.Key_Right:
             case Qt.Key_J:
-                moveSelection(1, 1)
+                moveSelection(1)
                 break
 
-            case Qt.Key_K:
             case Qt.Key_Left:
-                moveSelection(-1, 1)
+            case Qt.Key_K:
+                moveSelection(-1)
                 break
 
             case Qt.Key_D:
-                moveSelection(big, big)
+                moveSelection(big)
                 break
 
             case Qt.Key_U:
-                moveSelection(-big, big)
+                moveSelection(-big)
                 break
 
             case Qt.Key_Space:
