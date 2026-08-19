@@ -74,9 +74,6 @@ PanelWindow {
 
         // ------------------------------------------------------------
         // FIXED LAYOUT
-        //
-        // Delegate width never changes.
-        // Magnification is purely visual.
         // ------------------------------------------------------------
 
         spacing: configs.baseSpacing
@@ -103,8 +100,6 @@ PanelWindow {
 
         // ------------------------------------------------------------
         // SINGLE SELECTION
-        //
-        // Mouse and keyboard both use this.
         // ------------------------------------------------------------
 
         property int selectedIndex: 0
@@ -126,11 +121,10 @@ PanelWindow {
         }
 
         // ------------------------------------------------------------
-        // Keep a selected wallpaper inside the center zone.
+        // Keep selected wallpaper inside the center zone.
         //
-        // IMPORTANT:
-        // This is only called by keyboard navigation.
-        // Mouse hovering does NOT call this function.
+        // This is used by keyboard navigation.
+        // Hovering does NOT move the strip.
         // ------------------------------------------------------------
 
         function keepSelectedInCenterZone(i) {
@@ -158,9 +152,9 @@ PanelWindow {
         }
 
         // ------------------------------------------------------------
-        // Select a wallpaper WITHOUT moving the strip.
+        // Select wallpaper without moving the strip.
         //
-        // This is used by mouse hover and mouse clicks.
+        // Mouse hover uses this.
         // ------------------------------------------------------------
 
         function selectWallpaper(i) {
@@ -168,10 +162,7 @@ PanelWindow {
         }
 
         // ------------------------------------------------------------
-        // Keyboard selection.
-        //
-        // This changes the selection and then moves the strip only if
-        // necessary.
+        // Keyboard navigation.
         // ------------------------------------------------------------
 
         function moveSelection(delta) {
@@ -189,7 +180,7 @@ PanelWindow {
         }
 
         // ------------------------------------------------------------
-        // Activate current wallpaper.
+        // Activate wallpaper.
         // ------------------------------------------------------------
 
         function activateCurrent() {
@@ -210,7 +201,7 @@ PanelWindow {
         }
 
         // ------------------------------------------------------------
-        // Smooth scrolling
+        // Smooth strip movement.
         // ------------------------------------------------------------
 
         Behavior on contentX {
@@ -226,25 +217,20 @@ PanelWindow {
         }
 
         // ------------------------------------------------------------
-        // Delegate
+        // Wallpaper delegate.
         // ------------------------------------------------------------
 
         delegate: Item {
             id: delegateItem
 
-            // Fixed layout width.
+            // Fixed slot width.
             width: list.tileWidth
             height: list.height
 
             property bool selected:
                 index === list.selectedIndex
 
-            // --------------------------------------------------------
-            // Magnification
-            //
-            // This changes only the visual content, never the layout.
-            // --------------------------------------------------------
-
+            // Position of the wallpaper's center on screen.
             property real visualCenterX:
                 x
                 - list.contentX
@@ -256,12 +242,20 @@ PanelWindow {
                     - list.viewportCenterX
                 )
 
+            // --------------------------------------------------------
+            // Dock-style magnification.
+            //
+            // The 1.35 factor makes the scale fall off more gradually.
+            // This keeps the strong edgeScale value while preventing
+            // wallpapers from becoming tiny too early.
+            // --------------------------------------------------------
+
             property real scaleFactor: {
                 const frac =
                     Math.min(
                         1,
                         distanceFromCenter
-                        / list.viewportCenterX
+                        / (list.viewportCenterX * 1.35)
                     )
 
                 const t =
@@ -277,24 +271,27 @@ PanelWindow {
                     ) * t
             }
 
+            // --------------------------------------------------------
+            // Visual content.
+            // --------------------------------------------------------
+
             Item {
                 id: content
-            
-                anchors.centerIn: parent
-            
-                // Compensate for the minimum scale so that edge wallpapers
-                // still visually fill their entire ListView slot.
-                width: parent.width / configs.edgeScale
-                height: parent.height
-            
-                scale: delegateItem.scaleFactor
+
+                anchors.centerIn:
+                    parent
+
+                width:
+                    parent.width
+
+                height:
+                    parent.height
+
+                scale:
+                    delegateItem.scaleFactor
 
                 transformOrigin:
                     Item.Center
-
-                // ----------------------------------------------------
-                // Wallpaper
-                // ----------------------------------------------------
 
                 Text {
                     id: alt
@@ -359,6 +356,7 @@ PanelWindow {
                                 img.source
 
                             img.source = ""
+
                             img.source = s
                         }
                     }
@@ -375,7 +373,7 @@ PanelWindow {
                 }
 
                 // ----------------------------------------------------
-                // SINGLE HIGHLIGHT
+                // Single highlight.
                 // ----------------------------------------------------
 
                 Rectangle {
@@ -406,7 +404,9 @@ PanelWindow {
             }
 
             // --------------------------------------------------------
-            // Mouse
+            // Mouse interaction.
+            //
+            // Hover selects the wallpaper but NEVER scrolls the strip.
             // --------------------------------------------------------
 
             MouseArea {
@@ -416,8 +416,6 @@ PanelWindow {
                 hoverEnabled:
                     true
 
-                // Hover changes the selected wallpaper, but DOES NOT
-                // move contentX.
                 onEntered: {
                     list.selectWallpaper(index)
                 }
@@ -427,8 +425,7 @@ PanelWindow {
                     list.activateCurrent()
                 }
 
-                // Wheel changes selection. Since this is equivalent to
-                // keyboard navigation, it is allowed to move the strip.
+                // Wheel navigation behaves like keyboard navigation.
                 onWheel: function(wheel) {
                     if (
                         wheel.angleDelta.y < 0
@@ -446,7 +443,7 @@ PanelWindow {
         }
 
         // ------------------------------------------------------------
-        // Keyboard
+        // Keyboard controls.
         // ------------------------------------------------------------
 
         Keys.onPressed: function(event) {
