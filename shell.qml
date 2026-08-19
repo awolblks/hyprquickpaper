@@ -105,9 +105,8 @@ PanelWindow {
 
         // Move the selected item's actual center to the center of the viewport.
         //
-        // We deliberately use item.x and item.width instead of calculating
-        // the position from the index. This is important because delegate
-        // widths change according to the magnification curve.
+        // The delegate widths are dynamic because of magnification, so we
+        // cannot calculate an item's position simply from its index.
         function ensureVisibleAnimated(i) {
             const item = itemAtIndex(i)
 
@@ -120,21 +119,29 @@ PanelWindow {
             contentX = clampX(targetX)
         }
 
-        // Moves the selection by `delta` tiles.
+        // Move selection and only calculate the destination after the
+        // ListView has had a chance to update the newly selected delegate.
         function moveSelection(delta, speedMultiplier) {
-            anim.v = configs.speed * speedMultiplier
+            const newIndex = clampIndex(selectedIndex + delta)
 
-            selectedIndex = clampIndex(selectedIndex + delta)
+            if (newIndex === selectedIndex)
+                return
 
-            ensureVisibleAnimated(selectedIndex)
+            selectedIndex = newIndex
+
+            Qt.callLater(function() {
+                ensureVisibleAnimated(newIndex)
+            })
         }
 
+        // A regular NumberAnimation gives deterministic behavior when
+        // contentX receives a new target repeatedly from keyboard input.
         Behavior on contentX {
-            SmoothedAnimation {
+            NumberAnimation {
                 id: anim
 
-                property int v: configs.speed
                 duration: configs.animDuration
+                easing.type: Easing.OutCubic
             }
         }
 
@@ -145,14 +152,15 @@ PanelWindow {
 
             property bool active: index === list.selectedIndex
 
-            // Base (unscaled) slot width.
-            // This is intentionally independent from the delegate's actual
-            // width because actual width depends on scaleFactor.
+            // Base width of the tile before magnification.
+            // This must not depend on the delegate's own width, otherwise
+            // the scale calculation would create a binding loop.
             readonly property real baseWidth: list.tileWidth
 
             // --- Dock-style magnification ---
             //
-            // Calculate scale from the delegate's current on-screen position.
+            // Scale is based on the tile's current position relative to
+            // the center of the viewport.
             property real scaleFactor: {
                 const centerX =
                     x - list.contentX + baseWidth / 2
@@ -164,6 +172,7 @@ PanelWindow {
                         / list.viewportCenterX
                     )
 
+                // Smoothstep interpolation.
                 const t =
                     1 - frac * frac * (3 - 2 * frac)
 
@@ -171,7 +180,7 @@ PanelWindow {
                     + (configs.zoomScale - configs.edgeScale) * t
             }
 
-            // The delegate's actual layout width changes with magnification.
+            // Actual layout width changes with magnification.
             width: baseWidth * scaleFactor
 
             Item {
@@ -217,8 +226,8 @@ PanelWindow {
                     source: "file://" + configs.cache_path + fileName
 
                     // Decode once at the largest size the image will ever
-                    // be displayed instead of changing sourceSize during
-                    // the animation.
+                    // be displayed instead of changing sourceSize while
+                    // the tile is animating.
                     sourceSize.width:
                         delegateItem.baseWidth * configs.zoomScale
 
@@ -276,11 +285,17 @@ PanelWindow {
 
                 hoverEnabled: true
 
-                onEntered: {
-                    list.selectedIndex = index
-                }
+                // Intentionally do not change selectedIndex on hover.
+                // Keyboard navigation remains authoritative and the mouse
+                // cannot unexpectedly interfere with arrow-key navigation.
 
                 onClicked: {
+                    list.selectedIndex = index
+
+                    Qt.callLater(function() {
+                        list.ensureVisibleAnimated(index)
+                    })
+
                     list.activateCurrent()
                 }
 
