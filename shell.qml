@@ -14,22 +14,23 @@ PanelWindow {
 
         JsonAdapter {
             id: configs
+
             property string wallpaper_path
             property string cache_path
             property int number_of_pictures
             property string border_color
             property real opacity
+
             // ---- Easy-to-edit settings ----
-            property int speed //5000          // scroll animation speed
-            property int animDuration //100    // ms for scroll animation
-            property real zoomScale //0.8        // scale of the tile at screen center (peak)
-            property real edgeScale //0.3      // scale of tiles at the screen edges (trough)
-            property real skewFactor //0   // italic-style shear on tiles
-            property int baseSpacing //8       // resting gap between tiles (grows automatically as tiles magnify)
+            property int speed
+            property int animDuration
+            property real zoomScale
+            property real edgeScale
+            property real skewFactor
+            property int baseSpacing
             // --------------------------------
         }
     }
-
 
     implicitHeight: 500
     implicitWidth: Screen.width
@@ -43,11 +44,16 @@ PanelWindow {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
 
     Component.onCompleted: {
-        Quickshell.execDetached(["bash", Quickshell.shellPath("cache.sh"), Quickshell.shellDir])
+        Quickshell.execDetached([
+            "bash",
+            Quickshell.shellPath("cache.sh"),
+            Quickshell.shellDir
+        ])
     }
 
     FolderListModel {
         id: folderModel
+
         folder: "file://" + configs.wallpaper_path
         showDirs: false
         nameFilters: ["*.png", "*.jpg"]
@@ -56,12 +62,20 @@ PanelWindow {
 
     ListView {
         id: list
+
         anchors.fill: parent
         focus: true
 
         model: folderModel
         orientation: ListView.Horizontal
+
         spacing: configs.baseSpacing
+
+        // Extra space at both ends allows the first and last wallpaper
+        // to be moved all the way to the center of the screen.
+        leftMargin: width / 2 - tileWidth / 2
+        rightMargin: width / 2 - tileWidth / 2
+
         clip: true
         cacheBuffer: 400
 
@@ -79,31 +93,46 @@ PanelWindow {
 
         function activateCurrent() {
             const path = folderModel.get(selectedIndex, "filePath")
-            Quickshell.execDetached(["bash", Quickshell.env("HOME") + "/.config/hyprquickpaper/commands.sh", path])
+
+            Quickshell.execDetached([
+                "bash",
+                Quickshell.env("HOME") + "/.config/hyprquickpaper/commands.sh",
+                path
+            ])
+
             Qt.quit()
         }
 
+        // Move the selected item's actual center to the center of the viewport.
+        //
+        // We deliberately use item.x and item.width instead of calculating
+        // the position from the index. This is important because delegate
+        // widths change according to the magnification curve.
         function ensureVisibleAnimated(i) {
-            const step = tileWidth + spacing
-            const itemStart = i * step
-            const itemEnd = itemStart + tileWidth + 20
+            const item = itemAtIndex(i)
 
-            if (itemStart < contentX)
-                contentX = clampX(itemStart)
-            else if (itemEnd > contentX + width)
-                contentX = clampX(itemStart - (width - step))
+            if (!item)
+                return
+
+            const itemCenter = item.x + item.width / 2
+            const targetX = itemCenter - width / 2
+
+            contentX = clampX(targetX)
         }
 
-        // Moves the selection by `delta` tiles, animating at `Multiplier`x speed
+        // Moves the selection by `delta` tiles.
         function moveSelection(delta, speedMultiplier) {
             anim.v = configs.speed * speedMultiplier
+
             selectedIndex = clampIndex(selectedIndex + delta)
+
             ensureVisibleAnimated(selectedIndex)
         }
 
         Behavior on contentX {
             SmoothedAnimation {
                 id: anim
+
                 property int v: configs.speed
                 duration: configs.animDuration
             }
@@ -111,55 +140,74 @@ PanelWindow {
 
         delegate: Item {
             id: delegateItem
+
             height: 500
+
             property bool active: index === list.selectedIndex
 
-            // Base (unscaled) slot width. Used to work out where this tile currently sits
-            // on screen for the magnification curve below. Deliberately NOT derived from
-            // this item's own (dynamic) width - if it were, width would depend on position
-            // which would depend on width, i.e. a binding loop.
+            // Base (unscaled) slot width.
+            // This is intentionally independent from the delegate's actual
+            // width because actual width depends on scaleFactor.
             readonly property real baseWidth: list.tileWidth
 
-            // --- Dock-style magnification: scale depends on on-screen position ---
-            // One binding instead of several chained ones - list.contentX already animates
-            // smoothly (SmoothedAnimation below), so this recomputes every frame during
-            // scroll anyway; no need for extra Behavior/NumberAnimation layered on top of
-            // it (that was two animations fighting over the same value, which is what was
-            // causing the sluggish feel).
+            // --- Dock-style magnification ---
+            //
+            // Calculate scale from the delegate's current on-screen position.
             property real scaleFactor: {
-                const centerX = x - list.contentX + baseWidth / 2
-                const frac = Math.min(1, Math.abs(centerX - list.viewportCenterX) / list.viewportCenterX)
-                const t = 1 - frac * frac * (3 - 2 * frac) // smoothstep falloff
-                return configs.edgeScale + (configs.zoomScale - configs.edgeScale) * t
+                const centerX =
+                    x - list.contentX + baseWidth / 2
+
+                const frac =
+                    Math.min(
+                        1,
+                        Math.abs(centerX - list.viewportCenterX)
+                        / list.viewportCenterX
+                    )
+
+                const t =
+                    1 - frac * frac * (3 - 2 * frac)
+
+                return configs.edgeScale
+                    + (configs.zoomScale - configs.edgeScale) * t
             }
 
-            // This IS the delegate's real layout width, so as it grows, ListView pushes
-            // every following tile further along - real spacing, not an overlapping overlay.
-            // No Behavior here: it already tracks contentX's smooth animation 1:1, and tiles
-            // never overlap in this layout, so there's nothing to visually smooth over.
+            // The delegate's actual layout width changes with magnification.
             width: baseWidth * scaleFactor
 
             Item {
                 id: content
+
                 anchors.centerIn: parent
+
                 width: parent.width
-                // Height scale uses the same factor but caps at 1.0 - the row is already
-                // full window height, so growing past that would just get clipped.
-                height: delegateItem.height * Math.min(1, delegateItem.scaleFactor)
+
+                // Prevent the image from becoming taller than the window.
+                height:
+                    delegateItem.height
+                    * Math.min(1, delegateItem.scaleFactor)
 
                 Text {
                     id: alt
+
                     text: ""
                     color: configs.border_color
+
                     anchors.centerIn: parent
+
                     font.pixelSize: 16
-                    transform: Shear { xFactor: configs.skewFactor }
+
+                    transform: Shear {
+                        xFactor: configs.skewFactor
+                    }
                 }
 
                 Image {
                     id: img
+
                     anchors.fill: parent
+
                     opacity: configs.opacity
+
                     fillMode: Image.PreserveAspectCrop
 
                     asynchronous: true
@@ -168,21 +216,28 @@ PanelWindow {
 
                     source: "file://" + configs.cache_path + fileName
 
-                    // Decode once at the largest size this image will ever be shown at
-                    // (the active/zoomed size), rather than tracking the animating
-                    // width/height - that would re-decode on every animation frame
-                    // and cause a visible blink.
-                    sourceSize.width: delegateItem.baseWidth * configs.zoomScale
-                    sourceSize.height: delegateItem.height
+                    // Decode once at the largest size the image will ever
+                    // be displayed instead of changing sourceSize during
+                    // the animation.
+                    sourceSize.width:
+                        delegateItem.baseWidth * configs.zoomScale
 
-                    transform: Shear { xFactor: configs.skewFactor }
+                    sourceSize.height:
+                        delegateItem.height
+
+                    transform: Shear {
+                        xFactor: configs.skewFactor
+                    }
 
                     Timer {
                         id: retryTimer
+
                         interval: 1000
                         repeat: false
+
                         onTriggered: {
                             const s = img.source
+
                             img.source = ""
                             img.source = s
                         }
@@ -198,24 +253,36 @@ PanelWindow {
 
                 Rectangle {
                     id: border
+
                     z: 10
+
                     anchors.fill: parent
+
                     visible: delegateItem.active
+
                     color: "transparent"
 
                     border.width: 2
                     border.color: configs.border_color
 
-                    transform: Shear { xFactor: configs.skewFactor }
+                    transform: Shear {
+                        xFactor: configs.skewFactor
+                    }
                 }
             }
 
             MouseArea {
                 anchors.fill: parent
+
                 hoverEnabled: true
 
-                onEntered: list.selectedIndex = index
-                onClicked: list.activateCurrent()
+                onEntered: {
+                    list.selectedIndex = index
+                }
+
+                onClicked: {
+                    list.activateCurrent()
+                }
 
                 onWheel: function(wheel) {
                     list.flick(-wheel.angleDelta.y * 8, 0)
@@ -232,23 +299,29 @@ PanelWindow {
             case Qt.Key_J:
                 moveSelection(1, 1)
                 break
+
             case Qt.Key_K:
             case Qt.Key_Left:
                 moveSelection(-1, 1)
                 break
+
             case Qt.Key_D:
                 moveSelection(big, big)
                 break
+
             case Qt.Key_U:
                 moveSelection(-big, big)
                 break
+
             case Qt.Key_Space:
             case Qt.Key_Return:
                 activateCurrent()
                 break
+
             case Qt.Key_Escape:
                 Qt.quit()
                 break
+
             default:
                 return
             }
