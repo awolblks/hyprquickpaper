@@ -218,7 +218,7 @@ PanelWindow {
              * regardless of whether the wallpaper is at the center
              * or at the edge.
              */
-            width: list.tileWidth
+            width: list.tileWidth * 1.15
             height: list.height
 
             property bool selected:
