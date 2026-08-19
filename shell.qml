@@ -82,7 +82,7 @@ PanelWindow {
         spacing: configs.baseSpacing
 
         property real tileWidth:
-            width / Math.max(1, configs.number_of_pictures)
+            width / Math.max(1, configs.number_of_pictures) * 1.5
 
         property real step:
             tileWidth + spacing
