@@ -69,263 +69,164 @@ PanelWindow {
         model: folderModel
         orientation: ListView.Horizontal
 
+        spacing: configs.baseSpacing
+
+        // Extra space at both ends allows the first and last wallpaper
+        // to be moved all the way to the center of the screen.
+        leftMargin: width / 2 - tileWidth / 2
+        rightMargin: width / 2 - tileWidth / 2
+
         clip: true
         cacheBuffer: 400
 
-        spacing: configs.baseSpacing
-
-        property real tileWidth:
-            width / Math.max(1, configs.number_of_pictures)
-
-        property real viewportCenterX:
-            width / 2
-
         property int selectedIndex: 0
-
-        property real centerZone:
-            width * 0.30
-
-        property real centerLeft:
-            viewportCenterX - centerZone / 2
-
-        property real centerRight:
-            viewportCenterX + centerZone / 2
-
-        // ------------------------------------------------------------
-        // Helpers
-        // ------------------------------------------------------------
+        property real tileWidth: width / configs.number_of_pictures - 10
+        property real viewportCenterX: width / 2
 
         function clampIndex(i) {
             return Math.max(0, Math.min(i, count - 1))
         }
 
-        function maxContentX() {
-            return Math.max(0, contentWidth - width)
-        }
-
         function clampX(x) {
-            return Math.max(0, Math.min(x, maxContentX()))
+            return Math.max(0, Math.min(x, contentWidth - width))
         }
-
-        function selectWallpaper(i) {
-            selectedIndex = clampIndex(i)
-        }
-
-        // ------------------------------------------------------------
-        // Keyboard scrolling
-        // ------------------------------------------------------------
-
-        function keepSelectedInCenterZone(i) {
-            const item = itemAtIndex(i)
-
-            if (!item)
-                return
-
-            const center =
-                item.x
-                - contentX
-                + tileWidth / 2
-
-            let targetX = contentX
-
-            if (center < centerLeft) {
-                targetX += center - centerLeft
-            } else if (center > centerRight) {
-                targetX += center - centerRight
-            } else {
-                return
-            }
-
-            contentX = clampX(targetX)
-        }
-
-        function moveSelection(delta) {
-            const newIndex =
-                clampIndex(selectedIndex + delta)
-
-            if (newIndex === selectedIndex)
-                return
-
-            selectedIndex = newIndex
-
-            Qt.callLater(function() {
-                keepSelectedInCenterZone(newIndex)
-            })
-        }
-
-        // ------------------------------------------------------------
-        // Activate wallpaper
-        // ------------------------------------------------------------
 
         function activateCurrent() {
-            const path =
-                folderModel.get(
-                    selectedIndex,
-                    "filePath"
-                )
+            const path = folderModel.get(selectedIndex, "filePath")
 
             Quickshell.execDetached([
                 "bash",
-                Quickshell.env("HOME")
-                    + "/.config/hyprquickpaper/commands.sh",
+                Quickshell.env("HOME") + "/.config/hyprquickpaper/commands.sh",
                 path
             ])
 
             Qt.quit()
         }
 
-        // ------------------------------------------------------------
-        // Smooth scrolling
-        // ------------------------------------------------------------
+        // Move the selected item's actual center to the center of the viewport.
+        //
+        // We deliberately use item.x and item.width instead of calculating
+        // the position from the index. This is important because delegate
+        // widths change according to the magnification curve.
+        function ensureVisibleAnimated(i) {
+            const item = itemAtIndex(i)
 
-        Behavior on contentX {
-            NumberAnimation {
-                duration: configs.animDuration
-                easing.type: Easing.OutCubic
-            }
+            if (!item)
+                return
+
+            const itemCenter = item.x + item.width / 2
+            const targetX = itemCenter - width / 2
+
+            contentX = clampX(targetX)
         }
 
-        // ------------------------------------------------------------
-        // Wallpaper delegate
-        // ------------------------------------------------------------
+        // Moves the selection by `delta` tiles.
+        function moveSelection(delta, speedMultiplier) {
+            anim.v = configs.speed * speedMultiplier
+
+            selectedIndex = clampIndex(selectedIndex + delta)
+
+            ensureVisibleAnimated(selectedIndex)
+        }
+
+        Behavior on contentX {
+            SmoothedAnimation {
+                id: anim
+
+                property int v: configs.speed
+                duration: configs.animDuration
+            }
+        }
 
         delegate: Item {
             id: delegateItem
 
-            /*
-             * IMPORTANT:
-             * This remains completely unchanged.
-             * The ListView still has exactly the same 7 slots.
-             */
-            width: list.tileWidth
-            height: list.height
+            height: 500
 
-            property bool selected:
-                index === list.selectedIndex
+            property bool active: index === list.selectedIndex
 
-            property real slotCenterX:
-                x
-                - list.contentX
-                + width / 2
+            // Base (unscaled) slot width.
+            // This is intentionally independent from the delegate's actual
+            // width because actual width depends on scaleFactor.
+            readonly property real baseWidth: list.tileWidth
 
-            property real distanceFromCenter:
-                Math.abs(
-                    slotCenterX
-                    - list.viewportCenterX
-                )
-
-            property real normalizedDistance: {
-                return Math.min(
-                    1,
-                    distanceFromCenter
-                    / list.viewportCenterX
-                )
-            }
-
-            /*
-             * Same scale curve as before.
-             */
+            // --- Dock-style magnification ---
+            //
+            // Calculate scale from the delegate's current on-screen position.
             property real scaleFactor: {
-                const d =
-                    normalizedDistance
+                const centerX =
+                    x - list.contentX + baseWidth / 2
+
+                const frac =
+                    Math.min(
+                        1,
+                        Math.abs(centerX - list.viewportCenterX)
+                        / list.viewportCenterX
+                    )
 
                 const t =
-                    1
-                    - d * d
-                    * (3 - 2 * d)
+                    1 - frac * frac * (3 - 2 * frac)
 
                 return configs.edgeScale
-                    + (
-                        configs.zoomScale
-                        - configs.edgeScale
-                    ) * t
+                    + (configs.zoomScale - configs.edgeScale) * t
             }
 
-            // --------------------------------------------------------
-            // Visual wallpaper
-            // --------------------------------------------------------
+            // The delegate's actual layout width changes with magnification.
+            width: baseWidth * scaleFactor
 
             Item {
-                id: visual
+                id: content
 
-                anchors.centerIn:
-                    parent
+                anchors.centerIn: parent
 
-                /*
-                 * THIS IS THE ONLY GEOMETRY CHANGE.
-                 *
-                 * The ListView slot remains unchanged.
-                 * The wallpaper itself is 10% wider.
-                 */
-                width:
-                    delegateItem.width * 1.30
+                width: parent.width
 
+                // Prevent the image from becoming taller than the window.
                 height:
                     delegateItem.height
-
-                scale:
-                    delegateItem.scaleFactor
-
-                transformOrigin:
-                    Item.Center
+                    * Math.min(1, delegateItem.scaleFactor)
 
                 Text {
                     id: alt
 
                     text: ""
+                    color: configs.border_color
 
-                    color:
-                        configs.border_color
-
-                    anchors.centerIn:
-                        parent
+                    anchors.centerIn: parent
 
                     font.pixelSize: 16
 
                     transform: Shear {
-                        xFactor:
-                            configs.skewFactor
+                        xFactor: configs.skewFactor
                     }
                 }
 
                 Image {
                     id: img
 
-                    anchors.fill:
-                        parent
+                    anchors.fill: parent
 
-                    opacity:
-                        configs.opacity
+                    opacity: configs.opacity
 
-                    fillMode:
-                        Image.PreserveAspectCrop
+                    fillMode: Image.PreserveAspectCrop
 
                     asynchronous: true
                     cache: false
                     smooth: true
 
-                    source:
-                        "file://"
-                        + configs.cache_path
-                        + fileName
+                    source: "file://" + configs.cache_path + fileName
 
-                    /*
-                     * Fixed decode size.
-                     *
-                     * This does NOT depend on the animated width
-                     * or scale, so scrolling doesn't cause blinking.
-                     */
+                    // Decode once at the largest size the image will ever
+                    // be displayed instead of changing sourceSize during
+                    // the animation.
                     sourceSize.width:
-                        delegateItem.width
-                        * 1.10
-                        * configs.zoomScale
+                        delegateItem.baseWidth * configs.zoomScale
 
                     sourceSize.height:
                         delegateItem.height
 
                     transform: Shear {
-                        xFactor:
-                            configs.skewFactor
+                        xFactor: configs.skewFactor
                     }
 
                     Timer {
@@ -335,115 +236,81 @@ PanelWindow {
                         repeat: false
 
                         onTriggered: {
-                            const s =
-                                img.source
+                            const s = img.source
 
                             img.source = ""
-
                             img.source = s
                         }
                     }
 
                     onStatusChanged: {
-                        if (
-                            status === Image.Error
-                        ) {
+                        if (status === Image.Error) {
                             alt.text = "Caching"
                             retryTimer.start()
                         }
                     }
                 }
 
-                // ----------------------------------------------------
-                // Highlight
-                // ----------------------------------------------------
-
                 Rectangle {
                     id: border
 
                     z: 10
 
-                    anchors.fill:
-                        parent
+                    anchors.fill: parent
 
-                    visible:
-                        delegateItem.selected
+                    visible: delegateItem.active
 
-                    color:
-                        "transparent"
+                    color: "transparent"
 
                     border.width: 2
-
-                    border.color:
-                        configs.border_color
+                    border.color: configs.border_color
 
                     transform: Shear {
-                        xFactor:
-                            configs.skewFactor
+                        xFactor: configs.skewFactor
                     }
                 }
             }
 
-            // --------------------------------------------------------
-            // Mouse
-            // --------------------------------------------------------
-
             MouseArea {
-                anchors.fill:
-                    parent
+                anchors.fill: parent
 
-                hoverEnabled:
-                    true
+                hoverEnabled: true
 
                 onEntered: {
-                    list.selectWallpaper(index)
+                    list.selectedIndex = index
                 }
 
                 onClicked: {
-                    list.selectWallpaper(index)
                     list.activateCurrent()
                 }
 
                 onWheel: function(wheel) {
-                    if (wheel.angleDelta.y < 0) {
-                        list.moveSelection(1)
-                    } else if (wheel.angleDelta.y > 0) {
-                        list.moveSelection(-1)
-                    }
-
+                    list.flick(-wheel.angleDelta.y * 8, 0)
                     wheel.accepted = true
                 }
             }
         }
 
-        // ------------------------------------------------------------
-        // Keyboard
-        // ------------------------------------------------------------
-
         Keys.onPressed: function(event) {
-            const big =
-                Math.max(
-                    1,
-                    configs.number_of_pictures
-                )
+            const big = configs.number_of_pictures
 
             switch (event.key) {
             case Qt.Key_Right:
             case Qt.Key_J:
-                moveSelection(1)
+                moveSelection(1, 1)
                 break
 
-            case Qt.Key_Left:
             case Qt.Key_K:
-                moveSelection(-1)
+            case Qt.Key_Left:
+                moveSelection(-1, 1)
                 break
 
             case Qt.Key_D:
-                moveSelection(big)
+                moveSelection(big, big)
                 break
 
             case Qt.Key_U:
-                moveSelection(-big)
+                moveSelection(-big, big)
                 break
 
             case Qt.Key_Space:
