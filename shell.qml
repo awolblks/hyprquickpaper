@@ -258,7 +258,7 @@ PanelWindow {
                  * The wallpaper itself is 10% wider.
                  */
                 width:
-                    delegateItem.width * 1.10
+                    delegateItem.width * 1.30
 
                 height:
                     delegateItem.height
