@@ -72,23 +72,30 @@ PanelWindow {
         clip: true
         cacheBuffer: 400
 
-        // ------------------------------------------------------------
-        // FIXED LAYOUT
-        // ------------------------------------------------------------
-
+        /*
+         * IMPORTANT:
+         *
+         * The ListView has fixed slots.
+         *
+         * Scaling a wallpaper NEVER changes the ListView geometry.
+         */
         spacing: configs.baseSpacing
 
         property real tileWidth:
             width / Math.max(1, configs.number_of_pictures)
 
-        property real step:
-            tileWidth + spacing
-
         property real viewportCenterX:
             width / 2
 
-        // Selected wallpaper can move around inside this area before
-        // keyboard navigation starts moving the strip.
+        property int selectedIndex: 0
+
+        /*
+         * This determines how much of the viewport a selected
+         * wallpaper is allowed to wander through before the strip
+         * itself moves.
+         *
+         * It is deliberately independent of the visual scale.
+         */
         property real centerZone:
             width * 0.30
 
@@ -97,12 +104,6 @@ PanelWindow {
 
         property real centerRight:
             viewportCenterX + centerZone / 2
-
-        // ------------------------------------------------------------
-        // SINGLE SELECTION
-        // ------------------------------------------------------------
-
-        property int selectedIndex: 0
 
         // ------------------------------------------------------------
         // Helpers
@@ -120,11 +121,15 @@ PanelWindow {
             return Math.max(0, Math.min(x, maxContentX()))
         }
 
+        function selectWallpaper(i) {
+            selectedIndex = clampIndex(i)
+        }
+
         // ------------------------------------------------------------
-        // Keep selected wallpaper inside the center zone.
+        // Keyboard scrolling
         //
-        // This is used by keyboard navigation.
-        // Hovering does NOT move the strip.
+        // The selected wallpaper's FIXED SLOT is what determines
+        // scrolling. The visual scale has no influence on it.
         // ------------------------------------------------------------
 
         function keepSelectedInCenterZone(i) {
@@ -136,7 +141,7 @@ PanelWindow {
             const center =
                 item.x
                 - contentX
-                + item.width / 2
+                + tileWidth / 2
 
             let targetX = contentX
 
@@ -150,20 +155,6 @@ PanelWindow {
 
             contentX = clampX(targetX)
         }
-
-        // ------------------------------------------------------------
-        // Select wallpaper without moving the strip.
-        //
-        // Mouse hover uses this.
-        // ------------------------------------------------------------
-
-        function selectWallpaper(i) {
-            selectedIndex = clampIndex(i)
-        }
-
-        // ------------------------------------------------------------
-        // Keyboard navigation.
-        // ------------------------------------------------------------
 
         function moveSelection(delta) {
             const newIndex =
@@ -180,7 +171,7 @@ PanelWindow {
         }
 
         // ------------------------------------------------------------
-        // Activate wallpaper.
+        // Activate wallpaper
         // ------------------------------------------------------------
 
         function activateCurrent() {
@@ -201,68 +192,87 @@ PanelWindow {
         }
 
         // ------------------------------------------------------------
-        // Smooth strip movement.
+        // Smooth keyboard scrolling
         // ------------------------------------------------------------
 
         Behavior on contentX {
             NumberAnimation {
-                id: scrollAnimation
-
-                duration:
-                    configs.animDuration
-
-                easing.type:
-                    Easing.OutCubic
+                duration: configs.animDuration
+                easing.type: Easing.OutCubic
             }
         }
 
         // ------------------------------------------------------------
-        // Wallpaper delegate.
+        // Wallpaper
         // ------------------------------------------------------------
 
         delegate: Item {
             id: delegateItem
 
-            // Fixed slot width.
+            /*
+             * FIXED SLOT.
+             *
+             * This is the most important part.
+             *
+             * The ListView always has exactly the same geometry,
+             * regardless of whether the wallpaper is at the center
+             * or at the edge.
+             */
             width: list.tileWidth
             height: list.height
 
             property bool selected:
                 index === list.selectedIndex
 
-            // Position of the wallpaper's center on screen.
-            property real visualCenterX:
+            /*
+             * Fixed center of this slot on the screen.
+             */
+            property real slotCenterX:
                 x
                 - list.contentX
                 + width / 2
 
+            /*
+             * Distance from the actual screen center.
+             */
             property real distanceFromCenter:
                 Math.abs(
-                    visualCenterX
+                    slotCenterX
                     - list.viewportCenterX
                 )
 
-            // --------------------------------------------------------
-            // Dock-style magnification.
-            //
-            // The 1.35 factor makes the scale fall off more gradually.
-            // This keeps the strong edgeScale value while preventing
-            // wallpapers from becoming tiny too early.
-            // --------------------------------------------------------
+            /*
+             * Normalized distance.
+             *
+             * 0 = exact center
+             * 1 = screen edge
+             */
+            property real normalizedDistance: {
+                return Math.min(
+                    1,
+                    distanceFromCenter
+                    / list.viewportCenterX
+                )
+            }
 
+            /*
+             * Smoothstep curve.
+             *
+             * This is deliberately NOT configurable.
+             *
+             * It simply gives us:
+             *
+             * center -> zoomScale
+             * edge   -> edgeScale
+             */
             property real scaleFactor: {
-                const frac =
-                    Math.min(
-                        1,
-                        distanceFromCenter
-                        / (list.viewportCenterX * 1.7)
-                    )
+                const d =
+                    normalizedDistance
 
                 const t =
                     1
-                    - frac
-                    * frac
-                    * (3 - 2 * frac)
+                    - d * d
+                    * (3 - 2 * d)
 
                 return configs.edgeScale
                     + (
@@ -271,27 +281,31 @@ PanelWindow {
                     ) * t
             }
 
-            // --------------------------------------------------------
-            // Visual content.
-            // --------------------------------------------------------
-
+            /*
+             * The visual wallpaper is centered on the FIXED slot
+             * center. It does not participate in ListView geometry.
+             */
             Item {
-                id: content
+                id: visual
+
+                width:
+                    delegateItem.width
+
+                height:
+                    delegateItem.height
 
                 anchors.centerIn:
                     parent
-
-                width:
-                    parent.width
-
-                height:
-                    parent.height
 
                 scale:
                     delegateItem.scaleFactor
 
                 transformOrigin:
                     Item.Center
+
+                // ----------------------------------------------------
+                // Fallback text
+                // ----------------------------------------------------
 
                 Text {
                     id: alt
@@ -311,6 +325,10 @@ PanelWindow {
                             configs.skewFactor
                     }
                 }
+
+                // ----------------------------------------------------
+                // Wallpaper
+                // ----------------------------------------------------
 
                 Image {
                     id: img
@@ -333,6 +351,13 @@ PanelWindow {
                         + configs.cache_path
                         + fileName
 
+                    /*
+                     * Decode at the largest size needed.
+                     *
+                     * This is independent of the animated visual
+                     * scale, so scrolling does not repeatedly
+                     * trigger image decoding.
+                     */
                     sourceSize.width:
                         delegateItem.width
                         * configs.zoomScale
@@ -363,8 +388,7 @@ PanelWindow {
 
                     onStatusChanged: {
                         if (
-                            status
-                            === Image.Error
+                            status === Image.Error
                         ) {
                             alt.text = "Caching"
                             retryTimer.start()
@@ -373,7 +397,7 @@ PanelWindow {
                 }
 
                 // ----------------------------------------------------
-                // Single highlight.
+                // SINGLE HIGHLIGHT
                 // ----------------------------------------------------
 
                 Rectangle {
@@ -390,8 +414,7 @@ PanelWindow {
                     color:
                         "transparent"
 
-                    border.width:
-                        2
+                    border.width: 2
 
                     border.color:
                         configs.border_color
@@ -404,9 +427,7 @@ PanelWindow {
             }
 
             // --------------------------------------------------------
-            // Mouse interaction.
-            //
-            // Hover selects the wallpaper but NEVER scrolls the strip.
+            // Mouse
             // --------------------------------------------------------
 
             MouseArea {
@@ -416,6 +437,11 @@ PanelWindow {
                 hoverEnabled:
                     true
 
+                /*
+                 * Hover ONLY changes selection.
+                 *
+                 * It does NOT modify contentX.
+                 */
                 onEntered: {
                     list.selectWallpaper(index)
                 }
@@ -425,15 +451,13 @@ PanelWindow {
                     list.activateCurrent()
                 }
 
-                // Wheel navigation behaves like keyboard navigation.
+                /*
+                 * Wheel behaves like keyboard navigation.
+                 */
                 onWheel: function(wheel) {
-                    if (
-                        wheel.angleDelta.y < 0
-                    ) {
+                    if (wheel.angleDelta.y < 0) {
                         list.moveSelection(1)
-                    } else if (
-                        wheel.angleDelta.y > 0
-                    ) {
+                    } else if (wheel.angleDelta.y > 0) {
                         list.moveSelection(-1)
                     }
 
@@ -443,7 +467,7 @@ PanelWindow {
         }
 
         // ------------------------------------------------------------
-        // Keyboard controls.
+        // Keyboard
         // ------------------------------------------------------------
 
         Keys.onPressed: function(event) {
