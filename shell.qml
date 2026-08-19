@@ -82,7 +82,7 @@ PanelWindow {
         spacing: configs.baseSpacing
 
         property real tileWidth:
-            width / Math.max(1, configs.number_of_pictures) * 1.5
+            width / Math.max(1, configs.number_of_pictures)
 
         property real step:
             tileWidth + spacing
@@ -279,18 +279,15 @@ PanelWindow {
 
             Item {
                 id: content
-
-                anchors.centerIn:
-                    parent
-
-                width:
-                    parent.width
-
-                height:
-                    parent.height
-
-                scale:
-                    delegateItem.scaleFactor
+            
+                anchors.centerIn: parent
+            
+                // Compensate for the minimum scale so that edge wallpapers
+                // still visually fill their entire ListView slot.
+                width: parent.width / configs.edgeScale
+                height: parent.height
+            
+                scale: delegateItem.scaleFactor
 
                 transformOrigin:
                     Item.Center
