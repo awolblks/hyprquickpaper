@@ -47,7 +47,7 @@ PanelWindow {
         Quickshell.execDetached([
             "bash",
             Quickshell.shellPath("cache.sh"),
-            shellDir
+            Quickshell.shellDir
         ])
     }
 
@@ -69,32 +69,42 @@ PanelWindow {
         model: folderModel
         orientation: ListView.Horizontal
 
-        // This now controls the actual horizontal gap.
+        // ---------------------------------------------------------
+        // Spacing between the actual resting-size images.
         //
-        // 0 = tiles sit directly next to each other.
-        // Positive values add horizontal space.
+        // With baseSpacing = 0, the edge-scale images touch.
+        // Positive values add a gap.
+        // ---------------------------------------------------------
         spacing: configs.baseSpacing
 
-        // Base horizontal width of each wallpaper.
+        // ---------------------------------------------------------
+        // The layout slot is based on the smallest visual size.
         //
-        // IMPORTANT:
-        // edgeScale is NOT applied here.
-        //
-        // This means edgeScale can be 0.3 without making the
-        // wallpapers 70% narrower.
+        // The images themselves grow toward the center, but their
+        // centers remain fixed. This keeps ListView geometry stable
+        // and prevents the jumping/reversing bug.
+        // ---------------------------------------------------------
         property real tileWidth:
-            width / configs.number_of_pictures - 10
+            (width / configs.number_of_pictures - 10)
+            * configs.edgeScale
 
         property real viewportCenterX:
             width / 2
 
-        // Extra space at both ends allows the first and last
-        // wallpaper to be moved to the center.
+        // The largest visual width.
+        property real maxTileWidth:
+            (width / configs.number_of_pictures - 10)
+            * configs.zoomScale
+
+        // Extra room at the beginning and end so that the first
+        // and last image can reach the center of the screen.
         leftMargin:
-            width / 2 - tileWidth / 2
+            width / 2
+            - tileWidth / 2
 
         rightMargin:
-            width / 2 - tileWidth / 2
+            width / 2
+            - tileWidth / 2
 
         clip: true
         cacheBuffer: 400
@@ -102,19 +112,13 @@ PanelWindow {
         property int selectedIndex: 0
 
         function clampIndex(i) {
-            return Math.max(
-                0,
-                Math.min(i, count - 1)
-            )
+            return Math.max(0, Math.min(i, count - 1))
         }
 
         function clampX(x) {
             return Math.max(
                 0,
-                Math.min(
-                    x,
-                    Math.max(0, contentWidth - width)
-                )
+                Math.min(x, contentWidth - width)
             )
         }
 
@@ -135,11 +139,13 @@ PanelWindow {
             Qt.quit()
         }
 
-        // Move the selected item's center to the center
-        // of the viewport.
+        // ---------------------------------------------------------
+        // Move the selected item's center to the center of the
+        // viewport.
         //
-        // Delegate widths never change, so this remains stable
-        // while contentX is animated.
+        // Delegate widths are fixed, so item.x never changes as a
+        // consequence of magnification.
+        // ---------------------------------------------------------
         function ensureVisibleAnimated(i) {
             const item = itemAtIndex(i)
 
@@ -184,29 +190,24 @@ PanelWindow {
         delegate: Item {
             id: delegateItem
 
+            height: 500
+
             // -----------------------------------------------------
-            // FIX:
+            // FIX #1:
             //
-            // The delegate width is fixed.
+            // Delegate width NEVER changes while scrolling.
             //
-            // This is important because changing delegate width
-            // while ListView is animating contentX can make the
-            // ListView jump in the opposite direction.
+            // This prevents ListView from changing item positions
+            // while contentX is being animated.
             // -----------------------------------------------------
             width: list.tileWidth
-            height: 500
 
             property bool active:
                 index === list.selectedIndex
 
             // -----------------------------------------------------
-            // Calculate magnification based on distance from
-            // the center of the viewport.
-            //
-            // This produces:
-            //
-            // edge  -> edgeScale
-            // center -> zoomScale
+            // Calculate magnification from distance to viewport
+            // center.
             // -----------------------------------------------------
             property real scaleFactor: {
                 const centerX =
@@ -227,10 +228,7 @@ PanelWindow {
                         / list.viewportCenterX
                     )
 
-                // Smoothstep curve.
-                //
-                // 0 = center
-                // 1 = edge
+                // Smoothstep.
                 const t =
                     1
                     - normalized
@@ -244,52 +242,42 @@ PanelWindow {
                     ) * t
             }
 
+            // -----------------------------------------------------
+            // FIX #2:
+            //
+            // The visual content grows around its center.
+            //
+            // At the edges:
+            //
+            //     width = tileWidth
+            //
+            // At the center:
+            //
+            //     width = tileWidth * zoomScale / edgeScale
+            //
+            // This keeps the resting images exactly tileWidth apart.
+            // -----------------------------------------------------
             Item {
                 id: content
 
                 anchors.centerIn: parent
 
-                // -------------------------------------------------
-                // IMPORTANT:
-                //
-                // The content always occupies the full horizontal
-                // tile width.
-                //
-                // We do NOT scale this item's width.
-                // -------------------------------------------------
-                width: delegateItem.width
-                height: delegateItem.height
+                width:
+                    list.tileWidth
+                    * delegateItem.scaleFactor
+                    / configs.edgeScale
 
-                // -------------------------------------------------
-                // Independent X/Y scaling.
-                //
-                // X:
-                //   1.0 at the edges
-                //   zoomScale at the center
-                //
-                // Y:
-                //   edgeScale at the edges
-                //   zoomScale at the center
-                //
-                // Therefore edgeScale = 0.3 makes the image short
-                // without making it narrow.
-                // -------------------------------------------------
-                transform: Scale {
-                    origin.x:
-                        content.width / 2
+                height:
+                    delegateItem.height
 
-                    origin.y:
-                        content.height / 2
-
-                    xScale:
-                        Math.max(
-                            1.0,
-                            delegateItem.scaleFactor
-                        )
-
-                    yScale:
-                        delegateItem.scaleFactor
-                }
+                // Since tileWidth already represents the
+                // edgeScale-sized image, this scale produces:
+                //
+                // edge: 1.0
+                // center: zoomScale / edgeScale
+                //
+                scale:
+                    configs.edgeScale
 
                 Text {
                     id: alt
@@ -329,14 +317,17 @@ PanelWindow {
                         + configs.cache_path
                         + fileName
 
-                    // Decode at the largest size needed.
+                    // Decode at the largest size required.
                     sourceSize.width:
-                        delegateItem.width
+                        (
+                            list.width
+                            / configs.number_of_pictures
+                            - 10
+                        )
                         * configs.zoomScale
 
                     sourceSize.height:
                         delegateItem.height
-                        * configs.zoomScale
 
                     transform: Shear {
                         xFactor:
