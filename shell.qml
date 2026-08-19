@@ -75,9 +75,8 @@ PanelWindow {
         // ------------------------------------------------------------
         // FIXED LAYOUT
         //
-        // The ListView itself never changes tile width.
-        // Magnification happens only on the visual content inside each
-        // delegate.
+        // Delegate width never changes.
+        // Magnification is purely visual.
         // ------------------------------------------------------------
 
         spacing: configs.baseSpacing
@@ -91,8 +90,8 @@ PanelWindow {
         property real viewportCenterX:
             width / 2
 
-        // The selected tile can move within this area before the strip
-        // itself starts moving.
+        // Selected wallpaper can move around inside this area before
+        // keyboard navigation starts moving the strip.
         property real centerZone:
             width * 0.30
 
@@ -103,9 +102,9 @@ PanelWindow {
             viewportCenterX + centerZone / 2
 
         // ------------------------------------------------------------
-        // THERE IS ONLY ONE SELECTION
+        // SINGLE SELECTION
         //
-        // Mouse and keyboard both modify this value.
+        // Mouse and keyboard both use this.
         // ------------------------------------------------------------
 
         property int selectedIndex: 0
@@ -126,21 +125,12 @@ PanelWindow {
             return Math.max(0, Math.min(x, maxContentX()))
         }
 
-        function itemCenterOnScreen(i) {
-            const item = itemAtIndex(i)
-
-            if (!item)
-                return viewportCenterX
-
-            return item.x - contentX + item.width / 2
-        }
-
         // ------------------------------------------------------------
-        // Keep selected wallpaper inside the center zone.
+        // Keep a selected wallpaper inside the center zone.
         //
-        // It does NOT force the wallpaper to the exact center.
-        // It only starts moving the strip once the selected wallpaper
-        // leaves the center zone.
+        // IMPORTANT:
+        // This is only called by keyboard navigation.
+        // Mouse hovering does NOT call this function.
         // ------------------------------------------------------------
 
         function keepSelectedInCenterZone(i) {
@@ -168,25 +158,28 @@ PanelWindow {
         }
 
         // ------------------------------------------------------------
-        // Unified selection function.
+        // Select a wallpaper WITHOUT moving the strip.
         //
-        // BOTH mouse and keyboard use this.
-        //
-        // This is the important part that prevents the old problem
-        // where the cursor selected one wallpaper while the keyboard
-        // remembered another.
+        // This is used by mouse hover and mouse clicks.
         // ------------------------------------------------------------
 
         function selectWallpaper(i) {
-            const newIndex = clampIndex(i)
+            selectedIndex = clampIndex(i)
+        }
 
-            if (newIndex === selectedIndex) {
-                Qt.callLater(function() {
-                    keepSelectedInCenterZone(newIndex)
-                })
+        // ------------------------------------------------------------
+        // Keyboard selection.
+        //
+        // This changes the selection and then moves the strip only if
+        // necessary.
+        // ------------------------------------------------------------
 
+        function moveSelection(delta) {
+            const newIndex =
+                clampIndex(selectedIndex + delta)
+
+            if (newIndex === selectedIndex)
                 return
-            }
 
             selectedIndex = newIndex
 
@@ -196,15 +189,7 @@ PanelWindow {
         }
 
         // ------------------------------------------------------------
-        // Keyboard / wheel navigation
-        // ------------------------------------------------------------
-
-        function moveSelection(delta) {
-            selectWallpaper(selectedIndex + delta)
-        }
-
-        // ------------------------------------------------------------
-        // Activate selected wallpaper
+        // Activate current wallpaper.
         // ------------------------------------------------------------
 
         function activateCurrent() {
@@ -232,7 +217,8 @@ PanelWindow {
             NumberAnimation {
                 id: scrollAnimation
 
-                duration: configs.animDuration
+                duration:
+                    configs.animDuration
 
                 easing.type:
                     Easing.OutCubic
@@ -246,16 +232,19 @@ PanelWindow {
         delegate: Item {
             id: delegateItem
 
-            // FIXED width.
-            //
-            // Do NOT multiply this by scaleFactor.
+            // Fixed layout width.
             width: list.tileWidth
             height: list.height
 
             property bool selected:
                 index === list.selectedIndex
 
-            // Position of this tile's center on the screen.
+            // --------------------------------------------------------
+            // Magnification
+            //
+            // This changes only the visual content, never the layout.
+            // --------------------------------------------------------
+
             property real visualCenterX:
                 x
                 - list.contentX
@@ -266,13 +255,6 @@ PanelWindow {
                     visualCenterX
                     - list.viewportCenterX
                 )
-
-            // --------------------------------------------------------
-            // Magnification
-            //
-            // This only affects the visual item below.
-            // It does not affect ListView geometry.
-            // --------------------------------------------------------
 
             property real scaleFactor: {
                 const frac =
@@ -298,12 +280,17 @@ PanelWindow {
             Item {
                 id: content
 
-                anchors.centerIn: parent
+                anchors.centerIn:
+                    parent
 
-                width: parent.width
-                height: parent.height
+                width:
+                    parent.width
 
-                scale: delegateItem.scaleFactor
+                height:
+                    parent.height
+
+                scale:
+                    delegateItem.scaleFactor
 
                 transformOrigin:
                     Item.Center
@@ -320,7 +307,8 @@ PanelWindow {
                     color:
                         configs.border_color
 
-                    anchors.centerIn: parent
+                    anchors.centerIn:
+                        parent
 
                     font.pixelSize: 16
 
@@ -333,7 +321,8 @@ PanelWindow {
                 Image {
                     id: img
 
-                    anchors.fill: parent
+                    anchors.fill:
+                        parent
 
                     opacity:
                         configs.opacity
@@ -350,7 +339,6 @@ PanelWindow {
                         + configs.cache_path
                         + fileName
 
-                    // Decode once at maximum expected size.
                     sourceSize.width:
                         delegateItem.width
                         * configs.zoomScale
@@ -374,7 +362,6 @@ PanelWindow {
                                 img.source
 
                             img.source = ""
-
                             img.source = s
                         }
                     }
@@ -392,9 +379,6 @@ PanelWindow {
 
                 // ----------------------------------------------------
                 // SINGLE HIGHLIGHT
-                //
-                // There is no separate hover border anymore.
-                // Mouse and keyboard both manipulate selectedIndex.
                 // ----------------------------------------------------
 
                 Rectangle {
@@ -411,7 +395,8 @@ PanelWindow {
                     color:
                         "transparent"
 
-                    border.width: 2
+                    border.width:
+                        2
 
                     border.color:
                         configs.border_color
@@ -434,24 +419,19 @@ PanelWindow {
                 hoverEnabled:
                     true
 
-                // Hover immediately becomes the current selection.
-                //
-                // This means that if you move the mouse to wallpaper 6
-                // and then press Right, keyboard navigation starts from
-                // wallpaper 6 rather than jumping back to an old
-                // keyboard selection.
+                // Hover changes the selected wallpaper, but DOES NOT
+                // move contentX.
                 onEntered: {
                     list.selectWallpaper(index)
                 }
 
                 onClicked: {
                     list.selectWallpaper(index)
-
-                    Qt.callLater(function() {
-                        list.activateCurrent()
-                    })
+                    list.activateCurrent()
                 }
 
+                // Wheel changes selection. Since this is equivalent to
+                // keyboard navigation, it is allowed to move the strip.
                 onWheel: function(wheel) {
                     if (
                         wheel.angleDelta.y < 0
