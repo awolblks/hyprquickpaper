@@ -515,14 +515,3 @@ PanelWindow {
         }
     }
 }
-```
-
-The key change is that there is now **only `selectedIndex`**. Hovering wallpaper 6 makes `selectedIndex = 6`; pressing `→` then moves to 7. There is no second cursor index for the keyboard to disagree with.
-
-And the wallpapers should stay at the spacing dictated by:
-
-```qml
-spacing: configs.baseSpacing
-```
-
-because the delegate width is fixed and magnification is purely visual.
