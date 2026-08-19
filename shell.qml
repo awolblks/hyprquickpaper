@@ -255,7 +255,7 @@ PanelWindow {
                     Math.min(
                         1,
                         distanceFromCenter
-                        / (list.viewportCenterX * 1.35)
+                        / (list.viewportCenterX * 1.7)
                     )
 
                 const t =
