@@ -73,15 +73,27 @@ PanelWindow {
 
         // Extra space at both ends allows the first and last wallpaper
         // to be moved all the way to the center of the screen.
-        leftMargin: width / 2 - tileWidth / 2
-        rightMargin: width / 2 - tileWidth / 2
+        //
+        // Account for the largest visual size of the tile.
+        leftMargin: width / 2 - tileWidth * configs.zoomScale / 2
+        rightMargin: width / 2 - tileWidth * configs.zoomScale / 2
 
         clip: true
         cacheBuffer: 400
 
         property int selectedIndex: 0
-        property real tileWidth: width / configs.number_of_pictures - 10
-        property real viewportCenterX: width / 2
+
+        // Fixed layout width.
+        //
+        // IMPORTANT:
+        // This must NOT change with the magnification.
+        // Changing delegate width while contentX is moving can cause
+        // the ListView to recalculate item positions and jump backwards.
+        property real tileWidth:
+            width / configs.number_of_pictures - 10
+
+        property real viewportCenterX:
+            width / 2
 
         function clampIndex(i) {
             return Math.max(0, Math.min(i, count - 1))
@@ -103,19 +115,22 @@ PanelWindow {
             Qt.quit()
         }
 
-        // Move the selected item's actual center to the center of the viewport.
+        // Move the selected item's actual center to the center
+        // of the viewport.
         //
-        // We deliberately use item.x and item.width instead of calculating
-        // the position from the index. This is important because delegate
-        // widths change according to the magnification curve.
+        // Since delegate widths are now fixed, item.x remains stable
+        // while contentX is animated.
         function ensureVisibleAnimated(i) {
             const item = itemAtIndex(i)
 
             if (!item)
                 return
 
-            const itemCenter = item.x + item.width / 2
-            const targetX = itemCenter - width / 2
+            const itemCenter =
+                item.x + item.width / 2
+
+            const targetX =
+                itemCenter - width / 2
 
             contentX = clampX(targetX)
         }
@@ -124,7 +139,8 @@ PanelWindow {
         function moveSelection(delta, speedMultiplier) {
             anim.v = configs.speed * speedMultiplier
 
-            selectedIndex = clampIndex(selectedIndex + delta)
+            selectedIndex =
+                clampIndex(selectedIndex + delta)
 
             ensureVisibleAnimated(selectedIndex)
         }
@@ -134,6 +150,7 @@ PanelWindow {
                 id: anim
 
                 property int v: configs.speed
+
                 duration: configs.animDuration
             }
         }
@@ -143,53 +160,72 @@ PanelWindow {
 
             height: 500
 
-            property bool active: index === list.selectedIndex
+            // The selected item.
+            property bool active:
+                index === list.selectedIndex
 
-            // Base (unscaled) slot width.
-            // This is intentionally independent from the delegate's actual
-            // width because actual width depends on scaleFactor.
-            readonly property real baseWidth: list.tileWidth
+            // -------------------------------------------------
+            // FIX:
+            // Keep the ListView delegate width constant.
+            // -------------------------------------------------
+            readonly property real baseWidth:
+                list.tileWidth
 
-            // --- Dock-style magnification ---
+            width: baseWidth
+
+            // -------------------------------------------------
+            // Dock-style magnification
+            // -------------------------------------------------
             //
-            // Calculate scale from the delegate's current on-screen position.
+            // This calculates how close the item is to the
+            // center of the viewport.
+            //
+            // Unlike the old implementation, this value only
+            // changes the visual scale and NOT the ListView
+            // geometry.
             property real scaleFactor: {
                 const centerX =
-                    x - list.contentX + baseWidth / 2
+                    x - list.contentX + width / 2
 
                 const frac =
                     Math.min(
                         1,
-                        Math.abs(centerX - list.viewportCenterX)
-                        / list.viewportCenterX
+                        Math.abs(
+                            centerX - list.viewportCenterX
+                        ) / list.viewportCenterX
                     )
 
                 const t =
                     1 - frac * frac * (3 - 2 * frac)
 
                 return configs.edgeScale
-                    + (configs.zoomScale - configs.edgeScale) * t
+                    + (
+                        configs.zoomScale
+                        - configs.edgeScale
+                    ) * t
             }
-
-            // The delegate's actual layout width changes with magnification.
-            width: baseWidth * scaleFactor
 
             Item {
                 id: content
 
                 anchors.centerIn: parent
 
-                width: parent.width
+                // Keep the actual content at the fixed base size.
+                width: delegateItem.baseWidth
+                height: delegateItem.height
 
-                // Prevent the image from becoming taller than the window.
-                height:
-                    delegateItem.height
-                    * Math.min(1, delegateItem.scaleFactor)
+                // -------------------------------------------------
+                // IMPORTANT:
+                // Scale the visual content instead of changing
+                // the ListView delegate width.
+                // -------------------------------------------------
+                scale: delegateItem.scaleFactor
 
                 Text {
                     id: alt
 
                     text: ""
+
                     color: configs.border_color
 
                     anchors.centerIn: parent
@@ -214,13 +250,17 @@ PanelWindow {
                     cache: false
                     smooth: true
 
-                    source: "file://" + configs.cache_path + fileName
+                    source:
+                        "file://"
+                        + configs.cache_path
+                        + fileName
 
-                    // Decode once at the largest size the image will ever
-                    // be displayed instead of changing sourceSize during
-                    // the animation.
+                    // Decode once at the largest size the image
+                    // will ever be displayed instead of changing
+                    // sourceSize during the animation.
                     sourceSize.width:
-                        delegateItem.baseWidth * configs.zoomScale
+                        delegateItem.baseWidth
+                        * configs.zoomScale
 
                     sourceSize.height:
                         delegateItem.height
@@ -258,12 +298,14 @@ PanelWindow {
 
                     anchors.fill: parent
 
-                    visible: delegateItem.active
+                    visible:
+                        delegateItem.active
 
                     color: "transparent"
 
                     border.width: 2
-                    border.color: configs.border_color
+                    border.color:
+                        configs.border_color
 
                     transform: Shear {
                         xFactor: configs.skewFactor
@@ -285,14 +327,19 @@ PanelWindow {
                 }
 
                 onWheel: function(wheel) {
-                    list.flick(-wheel.angleDelta.y * 8, 0)
+                    list.flick(
+                        -wheel.angleDelta.y * 8,
+                        0
+                    )
+
                     wheel.accepted = true
                 }
             }
         }
 
         Keys.onPressed: function(event) {
-            const big = configs.number_of_pictures
+            const big =
+                configs.number_of_pictures
 
             switch (event.key) {
             case Qt.Key_Right:
